@@ -1,0 +1,1 @@
+r.Post("/auth/logout", authHandler.Logout)
