@@ -5,6 +5,8 @@ import (
 	"auth-project/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
+
+	jwtpkg "auth-project/pkg/jwt"
 )
 
 type AuthService struct {
@@ -35,11 +37,11 @@ func (s *AuthService) Register(email, password string) (int, error) {
 	return id, nil
 }
 
-func (s *AuthService) Login(email, password string) (*models.User, error) {
+func (s *AuthService) Login(email, password string) (string, error) {
 
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	err = bcrypt.CompareHashAndPassword(
@@ -48,8 +50,13 @@ func (s *AuthService) Login(email, password string) (*models.User, error) {
 	)
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return user, nil
+	token, err := jwtpkg.Generate(user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
