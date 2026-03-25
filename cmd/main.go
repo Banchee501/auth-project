@@ -44,4 +44,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	noteRepo := repository.NewNoteRepository(db)
+	noteService := service.NewNoteService(noteRepo)
+	noteHandler := handlers.NewNoteHandler(noteService)
+
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Auth)
+
+		r.Get("/me", userHandler.Me)
+
+		r.Get("/notes", noteHandler.GetAll)
+		r.Post("/notes", noteHandler.Create)
+		r.Delete("/notes/{id}", noteHandler.Delete)
+	})
 }
