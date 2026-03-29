@@ -22,32 +22,21 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(db)
+	refreshRepo := repository.NewRefreshRepository(db)
+	noteRepo := repository.NewNoteRepository(db)
 
-	authService := service.NewAuthService(userRepo)
+	authService := service.NewAuthService(userRepo, refreshRepo)
+	noteService := service.NewNoteService(noteRepo)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(authService)
+	noteHandler := handlers.NewNoteHandler(noteService)
 
 	r := chi.NewRouter()
 
 	r.Post("/auth/login", authHandler.Login)
 	r.Post("/auth/logout", authHandler.Logout)
-
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth)
-
-		r.Get("/me", userHandler.Me)
-	})
-
-	log.Println("Server started on :8080")
-	err = http.ListenAndServe(":8080", r)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	noteRepo := repository.NewNoteRepository(db)
-	noteService := service.NewNoteService(noteRepo)
-	noteHandler := handlers.NewNoteHandler(noteService)
+	r.Post("/auth/refresh", authHandler.Refresh)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth)
@@ -58,4 +47,10 @@ func main() {
 		r.Post("/notes", noteHandler.Create)
 		r.Delete("/notes/{id}", noteHandler.Delete)
 	})
+
+	log.Println("Server started on :8080")
+	err = http.ListenAndServe(":8080", r)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

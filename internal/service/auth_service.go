@@ -3,6 +3,7 @@ package service
 import (
 	"auth-project/internal/models"
 	"auth-project/internal/repository"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -10,11 +11,18 @@ import (
 )
 
 type AuthService struct {
-	repo *repository.UserRepository
+	repo        *repository.UserRepository
+	refreshRepo *repository.RefreshRepository
 }
 
-func NewAuthService(repo *repository.UserRepository) *AuthService {
-	return &AuthService{repo: repo}
+func NewAuthService(
+	repo *repository.UserRepository,
+	refreshRepo *repository.RefreshRepository,
+) *AuthService {
+	return &AuthService{
+		repo:        repo,
+		refreshRepo: refreshRepo,
+	}
 }
 
 func (s *AuthService) Register(email, password string) (int, error) {
@@ -37,26 +45,47 @@ func (s *AuthService) Register(email, password string) (int, error) {
 	return id, nil
 }
 
-func (s *AuthService) Login(email, password string) (string, error) {
+func (s *AuthService) Login(email, password string) (string, string, error) {
 
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	err = bcrypt.CompareHashAndPassword(
 		[]byte(user.PasswordHash),
 		[]byte(password),
 	)
-
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	token, err := jwtpkg.Generate(user.ID)
+	access, _ := jwtpkg.GenerateAccess(user.ID)
+	refresh, _ := jwtpkg.GenerateRefresh(user.ID)
+
+	s.refreshRepo.Save(user.ID, refresh, time.Now().Add(time.Hour*24*7))
+
+	return access, refresh, nil
+}
+
+func (s *AuthService) GetUserByID(id int) (*models.User, error) {
+	return s.repo.GetByID(id)
+}
+
+func (s *AuthService) Refresh(oldToken string) (string, string, error) {
+
+	userID, err := s.refreshRepo.Find(oldToken)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return token, nil
+	// 🔥 rotation
+	s.refreshRepo.Delete(oldToken)
+
+	newAccess, _ := jwtpkg.GenerateAccess(userID)
+	newRefresh, _ := jwtpkg.GenerateRefresh(userID)
+
+	s.refreshRepo.Save(userID, newRefresh, time.Now().Add(time.Hour*24*7))
+
+	return newAccess, newRefresh, nil
 }
