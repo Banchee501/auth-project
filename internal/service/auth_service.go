@@ -7,6 +7,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/google/uuid"
+
 	jwtpkg "auth-project/pkg/jwt"
 )
 
@@ -45,7 +47,26 @@ func (s *AuthService) Register(email, password string) (int, error) {
 	return id, nil
 }
 
-func (s *AuthService) Login(email, password string) (string, string, error) {
+func (s *AuthService) Login(
+	email,
+	password,
+	userAgent,
+	ip string,
+) (string, string, error) {
+
+	deviceID := uuid.New().String()
+
+	access, _ := jwtpkg.GenerateAccess(user.ID)
+	refresh, _ := jwtpkg.GenerateRefresh(user.ID)
+
+	err = s.refreshRepo.Save(
+		user.ID,
+		refresh,
+		deviceID,
+		userAgent,
+		ip,
+		time.Now().Add(7*24*time.Hour),
+	)
 
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
@@ -59,9 +80,6 @@ func (s *AuthService) Login(email, password string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-
-	access, _ := jwtpkg.GenerateAccess(user.ID)
-	refresh, _ := jwtpkg.GenerateRefresh(user.ID)
 
 	s.refreshRepo.Save(user.ID, refresh, time.Now().Add(time.Hour*24*7))
 
@@ -79,7 +97,6 @@ func (s *AuthService) Refresh(oldToken string) (string, string, error) {
 		return "", "", err
 	}
 
-	// 🔥 rotation
 	s.refreshRepo.Delete(oldToken)
 
 	newAccess, _ := jwtpkg.GenerateAccess(userID)
@@ -88,4 +105,8 @@ func (s *AuthService) Refresh(oldToken string) (string, string, error) {
 	s.refreshRepo.Save(userID, newRefresh, time.Now().Add(time.Hour*24*7))
 
 	return newAccess, newRefresh, nil
+}
+
+func (s *AuthService) DeleteRefreshToken(token string) error {
+	return s.refreshRepo.Delete(token)
 }

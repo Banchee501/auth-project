@@ -16,6 +16,9 @@ func NewAuthHandler(s *service.AuthService) *AuthHandler {
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
+	userAgent := r.UserAgent()
+	ip := r.RemoteAddr
+
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -23,7 +26,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(&req)
 
-	access, refresh, err := h.service.Login(req.Email, req.Password)
+	access, refresh, err := h.service.Login(
+		req.Email,
+		req.Password,
+		userAgent,
+		ip,
+	)
 	if err != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
@@ -47,31 +55,43 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+
+	cookie, err := r.Cookie("refresh_token")
+	if err == nil {
+		_ = h.service.DeleteRefreshToken(cookie.Value)
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:   "access_token",
 		Value:  "",
 		MaxAge: -1,
 		Path:   "/",
 	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:   "refresh_token",
+		Value:  "",
+		MaxAge: -1,
+		Path:   "/",
+	})
+
+	w.Write([]byte("logged out"))
 }
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
-	// 1️⃣ беремо refresh token з cookie
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
 		http.Error(w, "no refresh token", http.StatusUnauthorized)
 		return
 	}
 
-	// 2️⃣ викликаємо service
 	access, refresh, err := h.service.Refresh(cookie.Value)
 	if err != nil {
 		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
 		return
 	}
 
-	// 3️⃣ ставимо новий access token
 	http.SetCookie(w, &http.Cookie{
 		Name:     "access_token",
 		Value:    access,
@@ -79,7 +99,6 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	// 4️⃣ ставимо новий refresh token (rotation)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refresh,
