@@ -4,6 +4,12 @@ import (
 	"net/http"
 )
 
+type AuthHandler struct {
+	service interface {
+		Refresh(token string) (access, refresh string, err error)
+	}
+}
+
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie("refresh_token")

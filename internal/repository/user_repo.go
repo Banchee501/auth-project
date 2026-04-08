@@ -50,3 +50,23 @@ func (r *UserRepository) GetByEmail(email string) (*models.User, error) {
 
 	return &user, nil
 }
+
+func (r *UserRepository) GetByID(id int) (*models.User, error) {
+
+	var user models.User
+
+	query := `
+	SELECT id, email, password_hash
+	FROM users
+	WHERE id=$1
+	`
+
+	err := r.db.QueryRow(context.Background(), query, id).
+		Scan(&user.ID, &user.Email, &user.PasswordHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}

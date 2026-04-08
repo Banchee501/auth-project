@@ -54,20 +54,6 @@ func (s *AuthService) Login(
 	ip string,
 ) (string, string, error) {
 
-	deviceID := uuid.New().String()
-
-	access, _ := jwtpkg.GenerateAccess(user.ID)
-	refresh, _ := jwtpkg.GenerateRefresh(user.ID)
-
-	err = s.refreshRepo.Save(
-		user.ID,
-		refresh,
-		deviceID,
-		userAgent,
-		ip,
-		time.Now().Add(7*24*time.Hour),
-	)
-
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
 		return "", "", err
@@ -81,7 +67,22 @@ func (s *AuthService) Login(
 		return "", "", err
 	}
 
-	s.refreshRepo.Save(user.ID, refresh, time.Now().Add(time.Hour*24*7))
+	access, _ := jwtpkg.GenerateAccess(user.ID)
+	refresh, _ := jwtpkg.GenerateRefresh(user.ID)
+
+	deviceID := uuid.New().String()
+
+	err = s.refreshRepo.Save(
+		user.ID,
+		refresh,
+		deviceID,
+		userAgent,
+		ip,
+		time.Now().Add(7*24*time.Hour),
+	)
+	if err != nil {
+		return "", "", err
+	}
 
 	return access, refresh, nil
 }
@@ -102,7 +103,8 @@ func (s *AuthService) Refresh(oldToken string) (string, string, error) {
 	newAccess, _ := jwtpkg.GenerateAccess(userID)
 	newRefresh, _ := jwtpkg.GenerateRefresh(userID)
 
-	s.refreshRepo.Save(userID, newRefresh, time.Now().Add(time.Hour*24*7))
+	deviceID := uuid.New().String()
+	s.refreshRepo.Save(userID, newRefresh, deviceID, "", "", time.Now().Add(time.Hour*24*7))
 
 	return newAccess, newRefresh, nil
 }
