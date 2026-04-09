@@ -4,6 +4,7 @@ import (
 	jwtpkg "auth-project/pkg/jwt"
 	"context"
 	"net/http"
+	"os"
 )
 
 type contextKey string
@@ -19,7 +20,7 @@ func Auth(next http.Handler) http.Handler {
 			return
 		}
 
-		userID, err := jwtpkg.Parse(cookie.Value)
+		userID, err := jwtpkg.Parse(cookie.Value, os.Getenv("JWT_SECRET"))
 		if err != nil {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
@@ -31,6 +32,7 @@ func Auth(next http.Handler) http.Handler {
 	})
 }
 
-func GetUserID(ctx context.Context) int {
-	return ctx.Value(userKey).(int)
+func GetUserID(ctx context.Context) (int, bool) {
+	id, ok := ctx.Value(userKey).(int)
+	return id, ok
 }

@@ -71,12 +71,12 @@ func (s *AuthService) Login(email, password, deviceID, userAgent, ip string) (st
 		return "", "", err
 	}
 
-	access, err := jwtpkg.GenerateAccess(user.ID)
+	access, err := jwtpkg.GenerateAccess(user.ID, s.jwtSecret, s.accessTTL)
 	if err != nil {
 		return "", "", err
 	}
 
-	refresh, err := jwtpkg.GenerateRefresh(user.ID)
+	refresh, err := jwtpkg.GenerateRefresh(user.ID, s.jwtSecret, s.refreshTTL)
 	if err != nil {
 		return "", "", err
 	}
@@ -117,15 +117,8 @@ func (s *AuthService) Refresh(oldToken string) (string, string, error) {
 		return "", "", err
 	}
 
-	newAccess, err := jwtpkg.GenerateAccess(userID)
-	if err != nil {
-		return "", "", err
-	}
-
-	newRefresh, err := jwtpkg.GenerateRefresh(userID)
-	if err != nil {
-		return "", "", err
-	}
+	newAccess, err := jwtpkg.GenerateAccess(userID, s.jwtSecret, s.accessTTL)
+	newRefresh, err := jwtpkg.GenerateRefresh(userID, s.jwtSecret, s.refreshTTL)
 
 	err = s.refreshRepo.Save(
 		userID,
