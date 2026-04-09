@@ -7,23 +7,32 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/google/uuid"
-
 	jwtpkg "auth-project/pkg/jwt"
 )
 
 type AuthService struct {
 	repo        *repository.UserRepository
 	refreshRepo *repository.RefreshRepository
+
+	jwtSecret  string
+	accessTTL  time.Duration
+	refreshTTL time.Duration
 }
 
 func NewAuthService(
 	repo *repository.UserRepository,
 	refreshRepo *repository.RefreshRepository,
+	jwtSecret string,
+	accessTTL time.Duration,
+	refreshTTL time.Duration,
 ) *AuthService {
+
 	return &AuthService{
 		repo:        repo,
 		refreshRepo: refreshRepo,
+		jwtSecret:   jwtSecret,
+		accessTTL:   accessTTL,
+		refreshTTL:  refreshTTL,
 	}
 }
 
@@ -62,14 +71,19 @@ func (s *AuthService) Login(email, password, deviceID, userAgent, ip string) (st
 		return "", "", err
 	}
 
-	access, _ := jwtpkg.GenerateAccess(user.ID)
-	refresh, _ := jwtpkg.GenerateRefresh(user.ID)
+	access, err := jwtpkg.GenerateAccess(user.ID)
+	if err != nil {
+		return "", "", err
+	}
 
-	deviceID := uuid.New().String()
+	refresh, err := jwtpkg.GenerateRefresh(user.ID)
+	if err != nil {
+		return "", "", err
+	}
 
 	err = s.refreshRepo.Save(
 		user.ID,
-		refreshToken,
+		refresh,
 		deviceID,
 		userAgent,
 		ip,
@@ -93,13 +107,37 @@ func (s *AuthService) Refresh(oldToken string) (string, string, error) {
 		return "", "", err
 	}
 
-	s.refreshRepo.Delete(oldToken)
+	session, err := s.refreshRepo.GetSession(oldToken)
+	if err != nil {
+		return "", "", err
+	}
 
-	newAccess, _ := jwtpkg.GenerateAccess(userID)
-	newRefresh, _ := jwtpkg.GenerateRefresh(userID)
+	err = s.refreshRepo.Delete(oldToken)
+	if err != nil {
+		return "", "", err
+	}
 
-	deviceID := uuid.New().String()
-	s.refreshRepo.Save(userID, newRefresh, deviceID, "", "", time.Now().Add(time.Hour*24*7))
+	newAccess, err := jwtpkg.GenerateAccess(userID)
+	if err != nil {
+		return "", "", err
+	}
+
+	newRefresh, err := jwtpkg.GenerateRefresh(userID)
+	if err != nil {
+		return "", "", err
+	}
+
+	err = s.refreshRepo.Save(
+		userID,
+		newRefresh,
+		session.DeviceID,
+		session.UserAgent,
+		session.IP,
+		time.Now().Add(s.refreshTTL),
+	)
+	if err != nil {
+		return "", "", err
+	}
 
 	return newAccess, newRefresh, nil
 }

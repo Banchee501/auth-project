@@ -7,6 +7,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type Session struct {
+	UserID    int
+	DeviceID  string
+	UserAgent string
+	IP        string
+}
+
 type RefreshRepository struct {
 	db *pgxpool.Pool
 }
@@ -47,6 +54,25 @@ func (r *RefreshRepository) Find(token string) (int, error) {
 		Scan(&userID)
 
 	return userID, err
+}
+
+func (r *RefreshRepository) GetSession(token string) (*Session, error) {
+	query := `
+	SELECT user_id, device_id, user_agent, ip
+	FROM refresh_tokens
+	WHERE token=$1 AND expires_at > now()
+	`
+
+	var s Session
+
+	err := r.db.QueryRow(context.Background(), query, token).
+		Scan(&s.UserID, &s.DeviceID, &s.UserAgent, &s.IP)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
 }
 
 func (r *RefreshRepository) Delete(token string) error {
