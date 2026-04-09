@@ -1,0 +1,25 @@
+# env
+.env
+
+# binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# build
+/bin/
+/build/
+
+# Go
+*.test
+*.out
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

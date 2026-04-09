@@ -47,12 +47,7 @@ func (s *AuthService) Register(email, password string) (int, error) {
 	return id, nil
 }
 
-func (s *AuthService) Login(
-	email,
-	password,
-	userAgent,
-	ip string,
-) (string, string, error) {
+func (s *AuthService) Login(email, password, deviceID, userAgent, ip string) (string, string, error) {
 
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
@@ -74,11 +69,11 @@ func (s *AuthService) Login(
 
 	err = s.refreshRepo.Save(
 		user.ID,
-		refresh,
+		refreshToken,
 		deviceID,
 		userAgent,
 		ip,
-		time.Now().Add(7*24*time.Hour),
+		time.Now().Add(s.refreshTTL),
 	)
 	if err != nil {
 		return "", "", err

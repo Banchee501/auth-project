@@ -3,6 +3,7 @@ package handlers
 import (
 	"auth-project/internal/service"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -12,6 +13,30 @@ type AuthHandler struct {
 
 func NewAuthHandler(s *service.AuthService) *AuthHandler {
 	return &AuthHandler{service: s}
+}
+
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		log.Println("DECODE ERROR:", err)
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.service.Register(req.Email, req.Password)
+	if err != nil {
+		log.Println("REGISTER ERROR:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte("registered"))
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -26,9 +51,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(&req)
 
+	deviceID, userAgent, ip := getDeviceInfo(r)
+
 	access, refresh, err := h.service.Login(
 		req.Email,
 		req.Password,
+		deviceID,
 		userAgent,
 		ip,
 	)
@@ -107,4 +135,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Write([]byte("refreshed"))
+}
+
+func getDeviceInfo(r *http.Request) (string, string, string) {
+	deviceID := r.Header.Get("X-Device-Id")
+	userAgent := r.UserAgent()
+	ip := r.RemoteAddr
+
+	return deviceID, userAgent, ip
 }

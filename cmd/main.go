@@ -3,20 +3,23 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
+	"auth-project/internal/config"
 	"auth-project/internal/handlers"
 	"auth-project/internal/middleware"
 	"auth-project/internal/repository"
 	"auth-project/internal/service"
 
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
 
-	connString := "postgres://postgres:password@localhost:5432/auth"
+	cfg := config.Load()
+	db, err := repository.NewPostgres(cfg.DBUrl)
 
-	db, err := repository.NewPostgres(connString)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,7 +28,13 @@ func main() {
 	refreshRepo := repository.NewRefreshRepository(db)
 	noteRepo := repository.NewNoteRepository(db)
 
-	authService := service.NewAuthService(userRepo, refreshRepo)
+	authService := service.NewAuthService(
+		userRepo,
+		refreshRepo,
+		cfg.JWTSecret,
+		cfg.AccessTTL,
+		cfg.RefreshTTL,
+	)
 	noteService := service.NewNoteService(noteRepo)
 
 	authHandler := handlers.NewAuthHandler(authService)
@@ -34,23 +43,39 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Post("/auth/login", authHandler.Login)
-	r.Post("/auth/logout", authHandler.Logout)
-	r.Post("/auth/refresh", authHandler.Refresh)
+	r.Use(chimiddleware.Logger)
+	r.Use(chimiddleware.Recoverer)
+
+	r.Route("/auth", func(r chi.Router) {
+		r.Post("/register", authHandler.Register)
+		r.Post("/login", authHandler.Login)
+		r.Post("/refresh", authHandler.Refresh)
+		r.Post("/logout", authHandler.Logout)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth)
 
 		r.Get("/me", userHandler.Me)
 
-		r.Get("/notes", noteHandler.GetAll)
-		r.Post("/notes", noteHandler.Create)
-		r.Delete("/notes/{id}", noteHandler.Delete)
+		r.Route("/notes", func(r chi.Router) {
+			r.Get("/", noteHandler.GetAll)
+			r.Post("/", noteHandler.Create)
+			r.Delete("/{id}", noteHandler.Delete)
+		})
 	})
 
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      r,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+	}
+
 	log.Println("Server started on :8080")
-	err = http.ListenAndServe(":8080", r)
-	if err != nil {
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

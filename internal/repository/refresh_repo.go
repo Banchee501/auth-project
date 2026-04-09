@@ -21,24 +21,15 @@ func (r *RefreshRepository) Save(
 	deviceID string,
 	userAgent string,
 	ip string,
-	exp time.Time,
+	expiresAt time.Time,
 ) error {
-
 	query := `
 	INSERT INTO refresh_tokens (user_id, token, device_id, user_agent, ip, expires_at)
 	VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
-	_, err := r.db.Exec(
-		context.Background(),
-		query,
-		userID,
-		token,
-		deviceID,
-		userAgent,
-		ip,
-		exp,
-	)
+	_, err := r.db.Exec(context.Background(), query,
+		userID, token, deviceID, userAgent, ip, expiresAt)
 
 	return err
 }
